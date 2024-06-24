@@ -1,7 +1,7 @@
 from datetime import datetime
 from random import randrange
 
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, render_template, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 
 from flask_wtf import FlaskForm
@@ -71,22 +71,22 @@ def index_view():
 @app.route('/add', methods=['GET', 'POST'])
 def add_opinion_view():
     form = OpinionForm()
-    # Если ошибок не возникло...
     if form.validate_on_submit():
-        # ...то нужно создать новый экземпляр класса Opinion:
+        text = form.text.data
+        # Если в БД уже есть мнение с текстом, который ввёл пользователь...
+        if Opinion.query.filter_by(text=text).first() is not None:
+            # ...вызвать функцию flash и передать соответствующее сообщение:
+            flash('Такое мнение уже было оставлено ранее!')
+            # Вернуть пользователя на страницу «Добавить новое мнение»:
+            return render_template('add_opinion.html', form=form)
         opinion = Opinion(
-            # И передать в него данные, полученные из формы:
             title=form.title.data,
-            text=form.text.data,
+            text=text,
             source=form.source.data
         )
-        # Затем добавить его в сессию работы с базой данных:
         db.session.add(opinion)
-        # И зафиксировать изменения:
         db.session.commit()
-        # Затем переадресовать пользователя на страницу добавленного мнения:
         return redirect(url_for('opinion_view', id=opinion.id))
-    # Если валидация не пройдена — просто отрисовать страницу с формой:
     return render_template('add_opinion.html', form=form)
 
 
