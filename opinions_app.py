@@ -1,8 +1,13 @@
 from datetime import datetime
 from random import randrange
 
-from flask import Flask, render_template
+from flask import Flask, render_template, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
+
+from flask_wtf import FlaskForm
+from wtforms import StringField, SubmitField, TextAreaField, URLField
+from wtforms.validators import DataRequired, Length, Optional
+
 
 app = Flask(__name__)
 
@@ -11,6 +16,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite3'
 # Создаём экземпляр SQLAlchemy и в качестве параметра
 # передаём в него экземпляр приложения Flask:
 db = SQLAlchemy(app)
+app.config['SECRET_KEY'] = 'd5fb8c4fa8bd46638dadc4e751e0d68d'
+
 
 class Opinion(db.Model):
     # ID — целое число, первичный ключ:
@@ -25,6 +32,24 @@ class Opinion(db.Model):
     # Дата и время — текущее время,
     # по этому столбцу база данных будет проиндексирована:
     timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
+
+
+# Класс формы опишите сразу после модели Opinion.
+class OpinionForm(FlaskForm):
+    title = StringField(
+        'Введите название фильма',
+        validators=[DataRequired(message='Обязательное поле'),
+                    Length(1, 128)]
+    )
+    text = TextAreaField(
+        'Напишите мнение',
+        validators=[DataRequired(message='Обязательное поле')]
+    )
+    source = URLField(
+        'Добавьте ссылку на подробный обзор фильма',
+        validators=[Length(1, 256), Optional()]
+    )
+    submit = SubmitField('Добавить')
 
 
 @app.route('/')
@@ -43,9 +68,26 @@ def index_view():
     return render_template('opinion.html', opinion=opinion)
 
 
-@app.route('/add')
+@app.route('/add', methods=['GET', 'POST'])
 def add_opinion_view():
-    return render_template('add_opinion.html')
+    form = OpinionForm()
+    # Если ошибок не возникло...
+    if form.validate_on_submit():
+        # ...то нужно создать новый экземпляр класса Opinion:
+        opinion = Opinion(
+            # И передать в него данные, полученные из формы:
+            title=form.title.data,
+            text=form.text.data,
+            source=form.source.data
+        )
+        # Затем добавить его в сессию работы с базой данных:
+        db.session.add(opinion)
+        # И зафиксировать изменения:
+        db.session.commit()
+        # Затем переадресовать пользователя на страницу добавленного мнения:
+        return redirect(url_for('opinion_view', id=opinion.id))
+    # Если валидация не пройдена — просто отрисовать страницу с формой:
+    return render_template('add_opinion.html', form=form)
 
 
 # Тут указывается конвертер пути для id:
